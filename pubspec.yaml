@@ -1,4 +1,4 @@
-name: rons_autoverhuur
+name: "ronsautoverhuur"
 description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
@@ -51,11 +51,17 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/rra.png
+    - assets/ford_unfocus.png
+    - assets/tesla_model_tree.png
+    - assets/dodge_rammed.png
+    - assets/rolled_royce.png
+    - assets/porsche9_11.png
+
+
 
   # To add assets to your application, add an assets section, like this:
   # assets:
