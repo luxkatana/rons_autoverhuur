@@ -1,15 +1,14 @@
 from datetime import date, datetime, timedelta, timezone
-from pydantic import BaseModel, Field, PrivateAttr
+from pydantic import BaseModel
 from typing import Annotated
 from fastapi import Depends
-import pymongo
 from db import authentication, usersdata
 import jwt
 import pwdlib
 
 SALT: str = (
-    "BariumSulfaat"  # This must be random, but for now, idc -- this is btw for the pwdlib
-)
+    "ammoniumsulfide"  # This must be random, but for now, idc -- this is btw for the pwdlib
+).encode()
 SECRET_KEY = "a5c4903f310215cab8d7c4e1719852778052cd25eb5b4ecff6512e5095fcf25c"  #  This is for the JWT token generation
 ALGORITHM = "HS256"
 password_hasher = pwdlib.PasswordHash.recommended()
@@ -17,6 +16,17 @@ password_hasher = pwdlib.PasswordHash.recommended()
 
 def hash_password(rawpassword: str) -> str:
     return password_hasher.hash(rawpassword, salt=SALT)
+
+
+def verify_hashes(original_hash: str, rawpassword: str) -> bool:
+    return original_hash == hash_password(rawpassword)
+
+
+def decode_jwt(jwttoken: str) -> str:
+    """
+    Returns the ID of the user (the _id field in mongodb)
+    """
+    return jwt.decode(jwttoken, SECRET_KEY, ALGORITHM)["id"]
 
 
 class Token(BaseModel):
@@ -37,8 +47,16 @@ class AuthUser(BaseModel):
     email: str
     password: str
 
+    @classmethod
+    def from_database(cls, databasereply: dict[str, str]) -> AuthUser:
+        databasereply["id"] = str(
+            databasereply.pop("_id")
+        )  # Conversion, _id is in pydantic private and for god's sake i cant access that
+        return cls(**databasereply)
 
-async def get_auth_user(email: str, password_hash: str) -> AuthUser | None:
+
+async def get_auth_user(email: str, password: str) -> AuthUser | None:
+    password_hash = hash_password(password)
     auth_user = await authentication.find_one(
         {"email": email, "password": password_hash}
     )
