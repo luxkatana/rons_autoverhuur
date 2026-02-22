@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Annotated
 from fastapi import Depends
@@ -29,17 +29,17 @@ def decode_jwt(jwttoken: str) -> str:
     return jwt.decode(jwttoken, SECRET_KEY, ALGORITHM)["id"]
 
 
-class Token(BaseModel):
-    access_token: str
-    token_type: str
-
-
 class UserData(BaseModel):  # From the userdata collectin
     id: str
     firstname: str
     lastname: str
     verified: bool
-    birthdate: date
+    birthdate: datetime
+
+    @classmethod
+    def from_database(cls, databasereply: dict[str, str]) -> UserData:
+        databasereply["id"] = str(databasereply.pop("_id"))
+        return cls(**databasereply)
 
 
 class AuthUser(BaseModel):
@@ -79,7 +79,7 @@ async def get_userdata(
     return UserData(**returned_userdata)
 
 
-def generate_jwt_token(authuser: AuthUser) -> Token:
+def generate_jwt_token(authuser: AuthUser) -> str:
     # NOTE: It's probably a good idea to have a delta time (expire time)
     # Nvm let's keep it simple, 5 minutes for now?
     payload = {
