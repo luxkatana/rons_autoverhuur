@@ -46,4 +46,8 @@ class TestApi:
                 },
             )
             response.raise_for_status()
-            await client.delete("/auth/sign-up")
+            client.headers["Authorization"] = (
+                f"Bearer {response.json()['access_token']}"
+            )
+            r = await client.delete("/auth/sign-up")
+            r.raise_for_status()

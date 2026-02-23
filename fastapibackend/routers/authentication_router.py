@@ -61,15 +61,15 @@ async def login(
     return Token(access_token=jwt_token)
 
 
-@AuthenticationRouter.delete(
-    "/sign-up", summary="Remove test account", status_code=status.HTTP_200_OK
-)
-async def delete_test_account() -> Response:
-    deleted_document = await db.authentication.find_one_and_delete(
-        {"email": "testcreate@gmail.com"}
+@AuthenticationRouter.delete("/sign-up", summary="Remove an account (needs token)")
+async def delete_test_account(
+    authuser: Annotated[authentication.AuthUser, Depends(get_current_user_auth)],
+) -> Response:
+    deleted_document = await db.authentication.delete_one(
+        {"_id": ObjectId(authuser.id)}
     )
     if deleted_document is not None:
-        await db.usersdata.delete_one({"_id": deleted_document["_id"]})
+        await db.usersdata.delete_one({"_id": ObjectId(authuser.id)})
     return Response()
 
 
