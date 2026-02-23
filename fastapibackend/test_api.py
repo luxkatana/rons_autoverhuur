@@ -1,4 +1,5 @@
-from httpx import ASGITransport, AsyncClient, Response
+from httpx import ASGITransport, AsyncClient
+from datetime import datetime
 import asyncio
 import pytest
 from app import api
@@ -11,7 +12,7 @@ class TestApi:
     async def get_authenticated_client(self) -> AsyncClient:
         client = AsyncClient(transport=ASGITransport(api), base_url="http://test")
         response = await client.post(
-            "/authenticate",
+            "/auth/authenticate",
             data={"email": "testuser67@gmail.com", "password": "wachtwoord"},
         )
 
@@ -29,4 +30,24 @@ class TestApi:
         client = await self.get_authenticated_client()
         response = await client.get("/userdata")
         response.raise_for_status()
-        print(response.json())
+
+    async def test_signup(self):
+        async with AsyncClient(
+            transport=ASGITransport(api), base_url="http://test"
+        ) as client:
+
+            response = await client.post(
+                "/auth/sign-up",
+                json={
+                    "firstname": "Ben",
+                    "lastname": "Dover",
+                    "email": "testcreate@gmail.com",
+                    "password": "letmeinpls",
+                },
+            )
+            response.raise_for_status()
+            client.headers["Authorization"] = (
+                f"Bearer {response.json()['access_token']}"
+            )
+            r = await client.delete("/auth/sign-up")
+            r.raise_for_status()
