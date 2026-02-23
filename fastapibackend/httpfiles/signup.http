@@ -1,0 +1,27 @@
+### 
+
+@base = http://127.0.0.1:8000
+
+
+### 
+
+POST {{base}}/auth/sign-up HTTP/1.1
+
+{
+  "email": "taseen@gmail.com",
+  "firstname": "Taseen",
+  "lastname": "Mohammed",
+  "password": "plsletmeinok?"
+}
+
+> {%
+	const access_token = response.body.access_token;
+	client.assert(response.status == 201, response.body);
+	client.global.set("access_token", access_token);
+%}
+
+
+### 
+
+DELETE {{base}}/auth/sign-up HTTP/1.1
+Authorization: Bearer {{access_token}}
