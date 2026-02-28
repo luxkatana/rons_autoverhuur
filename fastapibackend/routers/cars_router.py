@@ -1,12 +1,62 @@
+from bson import ObjectId
 import strawberry
+import pydantic
+from db import cars as carsDB
+from pydantic_mongo import ObjectIdField
 from strawberry.fastapi import GraphQLRouter
+
+
+@strawberry.input
+class SortBy:
+    age: int
+    seats: int
+
+
+class DatabaseCar(pydantic.BaseModel):
+    id: ObjectIdField = pydantic.Field(alias="_id")
+    age: int
+    brand: str
+    class_: str = pydantic.Field(alias="class")
+    model: str
+    roofbox_option: bool
+    seats: int
+    towbar: bool
+    type: str = pydantic.Field(alias="type")
+    winter_tires: bool
+    available: bool
+    car_image_base64: str
+
+
+async def get_cars(
+    # by: SortBy
+) -> list[Car]:
+    cars = []
+    async with carsDB.find() as cursor:
+        async for car in cursor:
+            cars.append(Car.from_pydantic(DatabaseCar.model_validate(car)))
+
+    return cars
+
+
+@strawberry.experimental.pydantic.type(model=DatabaseCar)
+class Car:
+    id: strawberry.ID
+    age: int
+    brand: str
+    class_: str = strawberry.field(name="class")
+    model: str
+    roofbox_option: bool
+    seats: int
+    towbar: bool
+    type: str
+    winter_tires: bool
+    car_image_base64: str
+    available: bool
 
 
 @strawberry.type
 class Query:
-    @strawberry.field
-    async def cars(self) -> str:
-        return "HAII MOM"
+    cars: list[Car] = strawberry.field(resolver=get_cars)
 
 
 schema = strawberry.Schema(Query)
