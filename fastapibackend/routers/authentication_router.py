@@ -6,15 +6,47 @@ Authentication router
 """
 
 from datetime import datetime, timezone
-from fastapi import APIRouter, Form, status, HTTPException, Depends, Response
+from fastapi import (
+    APIRouter,
+    Form,
+    WebSocket,
+    WebSocketException,
+    status,
+    HTTPException,
+    Depends,
+    Response,
+)
+from starlette import status as WebsocketStatusCodes
 from bson import ObjectId
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
 
 from pydantic import BaseModel, EmailStr, Field
+import starlette
 import authentication, db
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="authenticate")
+
+
+async def WS_get_current_user_data(websocket: WebSocket) -> authentication.UserData:
+    await websocket.accept()
+    token: str = await websocket.receive_text()
+
+    try:
+        user_id = authentication.decode_jwt(token)
+    except:
+        await websocket.close(
+            WebsocketStatusCodes.WS_1003_UNSUPPORTED_DATA, reason="JWT token is invalid"
+        )
+        return None
+
+    userdata = await db.usersdata.find_one({"_id": ObjectId(user_id)})
+    if userdata is None:
+        raise WebSocketException(
+            code=WebsocketStatusCodes.WS_1003_UNSUPPORTED_DATA,
+            reason="No user found with given _id",
+        )
+    return authentication.UserData.from_database(userdata)
 
 
 async def get_current_user_auth(
