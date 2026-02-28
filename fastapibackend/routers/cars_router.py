@@ -1,5 +1,5 @@
-from bson import ObjectId
 import strawberry
+from typing import Optional
 import pydantic
 from db import cars as carsDB
 from pydantic_mongo import ObjectIdField
@@ -7,9 +7,9 @@ from strawberry.fastapi import GraphQLRouter
 
 
 @strawberry.input
-class SortBy:
-    age: int
-    seats: int
+class Pagination:
+    items_amount: Optional[int] = 2
+    current_page: int
 
 
 class DatabaseCar(pydantic.BaseModel):
@@ -27,14 +27,30 @@ class DatabaseCar(pydantic.BaseModel):
     car_image_base64: str
 
 
-async def get_cars(
-    # by: SortBy
-) -> list[Car]:
+async def get_cars(pagination: Optional[Pagination] = None) -> list[Car]:
     cars = []
-    async with carsDB.find() as cursor:
-        async for car in cursor:
-            cars.append(Car.from_pydantic(DatabaseCar.model_validate(car)))
-
+    if pagination is None:
+        async with carsDB.find() as cursor:
+            async for car in cursor:
+                cars.append(Car.from_pydantic(DatabaseCar.model_validate(car)))
+    else:
+        page = pagination.current_page
+        pageSize = pagination.items_amount
+        async with await carsDB.aggregate(
+            [
+                {
+                    "$facet": {
+                        "data": [
+                            {"$skip": (page - 1) * pageSize},
+                            {"$limit": pageSize},
+                        ],
+                    },
+                },
+            ]
+        ) as cursor:
+            async for car in cursor:
+                for car in car["data"]:
+                    cars.append(Car.from_pydantic(DatabaseCar.model_validate(car)))
     return cars
 
 
