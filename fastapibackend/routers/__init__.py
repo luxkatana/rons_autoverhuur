@@ -4,7 +4,9 @@ from .authentication_router import (
     get_current_user_data,
 )
 from .verification_router import VerificationRouter
+from .cars_router import CarsRouter
 
+CarsRouter
 VerificationRouter
 AuthenticationRouter
 get_current_user_data
