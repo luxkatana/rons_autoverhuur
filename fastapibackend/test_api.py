@@ -13,7 +13,7 @@ class TestApi:
         client = AsyncClient(transport=ASGITransport(api), base_url="http://test")
         response = await client.post(
             "/auth/authenticate",
-            data={"email": "testuser67@gmail.com", "password": "wachtwoord"},
+            json={"email": "testuser67@gmail.com", "password": "wachtwoord"},
         )
 
         access_token = response.raise_for_status().json().get("access_token", False)

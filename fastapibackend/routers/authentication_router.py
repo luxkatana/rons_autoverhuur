@@ -75,14 +75,16 @@ class Token(BaseModel):
     token_type: str = "bearer"
 
 
+class AuthenticationPayload(BaseModel):
+    email: EmailStr
+    password: str
+
+
 @AuthenticationRouter.post("/authenticate", summary="Endpoint to authenticate/login")
-async def login(
-    email: EmailStr = Form(description="The e-mail", default="testuser67@gmail.com"),
-    password: str = Form(
-        description="The password raw (not hashed)", default="wachtwoord"
-    ),
-) -> Token:
-    auth_user = await authentication.get_auth_user(email, password)
+async def login(authpayload: AuthenticationPayload) -> Token:
+    auth_user = await authentication.get_auth_user(
+        authpayload.email, authpayload.password
+    )
     if auth_user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -141,7 +143,9 @@ async def signup(signupform: SignupInputForm) -> Response:  # e-mail is unique
             "verified": False,
         }
     )
-    newtoken = await login(signupform.email, signupform.password)
+    newtoken = await login(
+        AuthenticationPayload(email=signupform.email, password=signupform.password)
+    )
     return Response(
         status_code=status.HTTP_201_CREATED,
         content=newtoken.model_dump_json(),
