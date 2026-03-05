@@ -1,0 +1,31 @@
+### 
+
+@base = http://127.0.0.1:8000
+
+
+### 
+
+GET {{base}}/hi HTTP/1.1
+
+
+### 
+
+POST {{base}}/auth/authenticate HTTP/1.1
+
+{
+  "email": "taseen@gmail.com",
+  "password": "plsletmeinok?"
+}
+
+> {%
+	client.global.set("access_token", response.body.access_token)
+%}
+
+
+### 
+
+GET {{base}}/me HTTP/1.1
+Authorization: Bearer {{access_token}}
+
+
+### 
