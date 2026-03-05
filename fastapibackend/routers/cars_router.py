@@ -39,6 +39,7 @@ class DatabaseCar(pydantic.BaseModel):
     seats: int
     towbar: bool
     type: str = pydantic.Field(alias="type")
+    price: float
     winter_tires: bool
     available: bool
     car_image_base64: str
@@ -130,6 +131,7 @@ class Car:
     winter_tires: bool
     car_image_base64: str
     available: bool
+    price: float
 
 
 @strawberry.type
