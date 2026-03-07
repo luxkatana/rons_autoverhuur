@@ -49,3 +49,4 @@ app.*.map.json
 /fastapibackend/__pycache__
 /fastapibackend/routers/__pycache__
 
+/data-improvisation/.env
