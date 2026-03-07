@@ -3,22 +3,28 @@ NOTE: All prices here are weekly
 
 """
 
-import json
+import json, json5
 import random
 import pandas
+import os
+
+tariffs_file = os.path.abspath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "../tariffs.jsonc")
+)
 
 with open("./b64img.txt", "r") as f:
     b64img = f.read()
 with open("./exported_testing.json", "r") as file:
     data_read = json.load(file)
     data_read = pandas.DataFrame(data_read)
+with open(tariffs_file, "r") as file:
+    tariffs: dict[str, int] = json5.load(file)
 
 all_unique_models = data_read["model"].unique()
 all_unique_brands = data_read["brand"].unique()
 all_unique_car_types = data_read["type"].unique()
 all_unique_colors = data_read["color"].unique()
 output = []
-class_tarifs = {"A": 34 * 7, "B": 49 * 7, "C": 69 * 7}  # Week tariffs for class
 
 
 for _ in range(0, 100):
@@ -32,17 +38,17 @@ for _ in range(0, 100):
         "color": random.choice(all_unique_colors),
         "winter_tires": random.choice([True, False]),
         "roofbox_option": random.choice([True, False]),
-        "class": random.choice(["A", "B", "C"]),
+        "class": random.choice(["Compact", "Economy", "Off-Road", "Sport", "Standard"]),
         "base64_img_url": b64img,
         "available": True,
     }
-    price: float = class_tarifs[random_car["class"]]
+    price: float = tariffs[random_car["class"]]
     if random_car["towbar"] is True:
-        price += 105  # ADDITIONAL TOWBAR PRICE
+        price += tariffs["towbar_tariff"]  # ADDITIONAL TOWBAR PRICE
     if random_car["winter_tires"] is True:
-        price += 140
+        price += tariffs["winter_tires_tariff"]
     if random_car["roofbox_option"] is True:
-        price += 105
+        price += tariffs["roofbox_tariff"]
     random_car["price"] = price - 0.01
     output.append(random_car)
 

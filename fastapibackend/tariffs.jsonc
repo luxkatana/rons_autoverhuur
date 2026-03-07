@@ -1,0 +1,14 @@
+/*
+filetype: Json with comments
+These are daily tarives
+*/
+{
+	"Economy": 30, 
+	"Compact": 50,
+	"Standard": 70,
+	"Sport": 80,
+	"Off-Road": 100,
+	"roofbox_tariff": 15, 
+	"winter_tires_tariff": 20,
+	"towbar_tariff": 15
+}
