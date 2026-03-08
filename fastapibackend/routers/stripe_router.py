@@ -4,12 +4,12 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from starlette.responses import JSONResponse
 
-from routers.authentication_router import get_current_user_auth
+from routers.authentication_router import get_current_user_auth, get_current_user_data
 from pydantic import BaseModel
 from db import cars
 from bson import ObjectId
 
-from authentication import AuthUser
+from authentication import AuthUser, UserData
 from os import environ
 from db import payments_status
 
@@ -44,8 +44,15 @@ class PaymentPayload(BaseModel):
 @StripeRouter.post("/rent-car")
 async def rent_car(
     authuser: Annotated[AuthUser, Depends(get_current_user_auth)],
+    userdata: Annotated[UserData, Depends(get_current_user_data)],
     payload: PaymentPayload,
 ):
+    if userdata.verified is False:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Not yet verified, verify by opening a websocket connection at /ws-verify and sending then first the access token, and afterwards intercepting the message that the peer has sent",
+        )
+
     try:
         result = await cars.find_one({"_id": ObjectId(payload.car_id)})
     except:
@@ -58,6 +65,8 @@ async def rent_car(
             "Invalid car given or car is from VOS autoverhuur (Can't rent cars from VOS autoverhuur )",
         )
     car = DatabaseCar.model_validate(result)
+    if car.available is False:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Car is not available anymore")
     price = car.price
     price_in_cents: int = int(str(price).replace(".", ""))  # In cents actually
     product_name = f"De {car.brand} {car.model} {car.class_} {car.type}"

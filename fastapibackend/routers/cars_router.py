@@ -9,7 +9,7 @@ from strawberry.fastapi import GraphQLRouter
 @strawberry.input
 class Pagination:
     items_amount: Optional[int] = 2
-    current_page: int
+    current_page: Optional[int] = 1
 
 
 class VosCarDatabase(pydantic.BaseModel):
