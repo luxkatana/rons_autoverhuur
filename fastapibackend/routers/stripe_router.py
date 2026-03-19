@@ -193,7 +193,7 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
         subtype=MessageType.html,
     )
     fastmail = FastMail(
-        ConnectionConfig(  # WARNING: must be removed the credentials
+        ConnectionConfig(
             MAIL_USERNAME=environ["MAIL_USERNAME"],
             MAIL_PASSWORD=environ["MAIL_PASSWORD"],
             MAIL_SERVER="smtp.gmail.com",
