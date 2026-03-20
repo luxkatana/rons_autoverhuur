@@ -34,6 +34,7 @@ class UserData(BaseModel):  # From the userdata collectin
     firstname: str
     lastname: str
     verified: bool
+    email_verified: bool
     birthdate: datetime
 
     @classmethod
