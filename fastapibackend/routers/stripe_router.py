@@ -3,6 +3,7 @@ from typing import Annotated
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
+from emailing import send_mail
 from starlette.responses import JSONResponse
 
 from routers.authentication_router import get_current_user_auth, get_current_user_data
@@ -48,6 +49,8 @@ async def rent_car(
     userdata: Annotated[UserData, Depends(get_current_user_data)],
     payload: PaymentPayload,
 ):
+    if userdata.email_verified is False:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Email is not yet verified")
     if userdata.verified is False:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -118,7 +121,7 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
         subject=f"De betaling van de {product_name} is gelukt!",
         recipients=[
             userauth["email"]
-        ],  # Gewoon gepakken bij chatGPT deze body, ik heb geen zin om een eigen html pagina te gaan schrijven
+        ],  # Gewoon gepakt bij chatGPT deze body, ik heb geen zin om een eigen html pagina te gaan schrijven
         body=f"""
 <!DOCTYPE html>
 <html lang="nl">
@@ -192,20 +195,7 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
         """,
         subtype=MessageType.html,
     )
-    fastmail = FastMail(
-        ConnectionConfig(
-            MAIL_USERNAME=environ["MAIL_USERNAME"],
-            MAIL_PASSWORD=environ["MAIL_PASSWORD"],
-            MAIL_SERVER="smtp.gmail.com",
-            MAIL_FROM=environ["MAIL_FROM"],
-            MAIL_FROM_NAME="Team Razende Ron",
-            MAIL_SSL_TLS=False,
-            VALIDATE_CERTS=True,
-            MAIL_PORT=587,
-            MAIL_STARTTLS=True,
-        )
-    )
-    await fastmail.send_message(message)
+    await send_mail(message, UserData.model_validate(userdata))
 
 
 @StripeRouter.get("/payment-success")

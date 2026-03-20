@@ -6,9 +6,10 @@ Authentication router
 """
 
 from datetime import datetime, timezone
+from fastapi_mail import MessageSchema, MessageType
 from fastapi import (
     APIRouter,
-    Form,
+    BackgroundTasks,
     WebSocket,
     WebSocketException,
     status,
@@ -20,10 +21,15 @@ from starlette import status as WebsocketStatusCodes
 from bson import ObjectId
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
+from os import environ
+from dotenv import load_dotenv
 
 from pydantic import BaseModel, EmailStr, Field
-import starlette
+from emailing import send_mail
 import authentication, db
+
+load_dotenv()
+EMAIL_VERIFY_URL: str = f"{environ['EMAIL_VERIFY_URL']}?user_id={{}}"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="authenticate")
 
@@ -122,7 +128,9 @@ async def delete_test_account(
         422: {"description": "Validation error or e-mail exists"},
     },
 )
-async def signup(signupform: SignupInputForm) -> Response:  # e-mail is unique
+async def signup(
+    signupform: SignupInputForm, background_tasks: BackgroundTasks
+) -> Response:  # e-mail is unique
     existing_user = await db.authentication.find_one({"email": signupform.email})
     if existing_user is not None:
         raise HTTPException(
@@ -141,8 +149,26 @@ async def signup(signupform: SignupInputForm) -> Response:  # e-mail is unique
             "lastname": signupform.lastname,
             "birthdate": datetime(1, 1, 1, tzinfo=timezone.utc),
             "verified": False,
+            "email_verified": False,
         }
     )
+    verificationmail = MessageSchema(
+        recipients=[signupform.email],
+        subject="Verifieer jouw e-mail",
+        body=f"""
+        <!DOCTYPE html>
+        <html lang='nl'>
+
+
+        <body>
+        <h2>
+        Hallo, verifieer uw e-mail zodat we er zeker van kunnen zijn dat uw e-mail bestaat. <a href='{EMAIL_VERIFY_URL.format(str(newauthentication.inserted_id))}'>hier</a>
+        </h2>
+        </html>
+        """,
+        subtype=MessageType.html,
+    )
+    background_tasks.add_task(send_mail, messageschema=verificationmail)
     newtoken = await login(
         AuthenticationPayload(email=signupform.email, password=signupform.password)
     )

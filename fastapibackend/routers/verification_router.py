@@ -1,8 +1,17 @@
 from concurrent.futures import ProcessPoolExecutor
 from typing import Annotated
 from bson import ObjectId
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
 from dateutil.relativedelta import relativedelta
+from fastapi.responses import HTMLResponse
 from authentication import AuthUser
 from .authentication_router import WS_get_current_user_data
 from db import usersdata
@@ -76,6 +85,24 @@ async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
         "age": years_diff,
         "mrz_id_card": id_card_parsed_info,
     }
+
+
+@VerificationRouter.get("/email-verify")
+async def email_verify(user_id: str):
+    try:
+        buser_id = ObjectId(user_id)
+    except TypeError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST)
+    await usersdata.update_one({"_id": buser_id}, {"$set": {"email_verified": True}})
+    return HTMLResponse(f"""
+    <!DOCTYPE html>
+    <html>
+    <body>
+    <h1> Geverifieerd! Je mag nu deze pagina sluiten </h1>
+    </body>
+    </html>
+
+""")
 
 
 @VerificationRouter.websocket("/ws-verify", name="Verify legal documents")
