@@ -5,8 +5,10 @@ from .authentication_router import (
 )
 from .verification_router import VerificationRouter
 from .cars_router import CarsRouter, DatabaseCar
+from .stripe_webhooks_router import StripeWebhooksRouter
 from .stripe_router import StripeRouter
 
+StripeWebhooksRouter
 CarsRouter
 DatabaseCar
 VerificationRouter

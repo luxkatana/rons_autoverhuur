@@ -4,6 +4,7 @@ from routers import (
     AuthenticationRouter,
     VerificationRouter,
     CarsRouter,
+    StripeWebhooksRouter,
     StripeRouter,
     get_current_user_auth,
     get_current_user_data,
@@ -12,6 +13,7 @@ import authentication
 
 api = FastAPI(docs_url="/")
 api.include_router(AuthenticationRouter, prefix="/auth")
+api.include_router(StripeWebhooksRouter)
 api.include_router(VerificationRouter)
 api.include_router(CarsRouter)
 api.include_router(StripeRouter)

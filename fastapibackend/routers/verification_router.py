@@ -1,25 +1,35 @@
 from concurrent.futures import ProcessPoolExecutor
 from typing import Annotated
+import stripe
 from bson import ObjectId
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
-    Response,
     WebSocket,
     WebSocketDisconnect,
     status,
 )
 from dateutil.relativedelta import relativedelta
 from fastapi.responses import HTMLResponse
-from authentication import AuthUser
+from fastapi_mail import MessageSchema, MessageType
+from authentication import AuthUser, UserData
 from .authentication_router import WS_get_current_user_data
-from db import usersdata
+from dotenv import load_dotenv
+from emailing import send_mail
+from db import usersdata, authentication
 import asyncio
 from datetime import datetime
 from fastmrz import FastMRZ
+from os import environ
+
+load_dotenv()
+stripe.api_key = environ["STRIPE_SECRET_KEY"]
+
 
 VerificationRouter = APIRouter()
+
 executor = ProcessPoolExecutor()
 
 
@@ -30,7 +40,7 @@ def verify_idcard(base64_img: str) -> dict[str, str]:
 
 
 async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
-    await websocket.send_text("Yo gimme that juicy base64 image")
+    await websocket.send_text("Base64 image of id-card back")
     received_base64 = await websocket.receive_text()
     loop = asyncio.get_running_loop()
     id_card_parsed_info = await loop.run_in_executor(
@@ -88,17 +98,51 @@ async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
 
 
 @VerificationRouter.get("/email-verify")
-async def email_verify(user_id: str):
+async def email_verify(user_id: str, bgtask: BackgroundTasks):
     try:
         buser_id = ObjectId(user_id)
     except TypeError:
         raise HTTPException(status.HTTP_400_BAD_REQUEST)
+
+    userdata = await usersdata.find_one({"_id": buser_id})
+    authdata = await authentication.find_one({"_id": buser_id})
+    email = authdata["email"]
+    if userdata is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    if userdata["email_verified"] is True:  # Already verified
+        return HTMLResponse(
+            "<!DOCTYPE html><html><body><h1>Deze mail-link is ongeldig, deze account is al geverifieerd</h1></body></html>"
+        )
     await usersdata.update_one({"_id": buser_id}, {"$set": {"email_verified": True}})
+    verificationsession = await stripe.identity.VerificationSession.create_async(
+        type="document",
+        options={
+            "document": {
+                "require_matching_selfie": True,
+                # "allowed_types": ["driving_license", "id_card"],
+                "allowed_types": ["driving_license"],
+                "require_live_capture": True,
+            }
+        },
+        metadata={"user_id": user_id},
+        return_url=environ["STRIPE_RETURN_URL"],
+    )
+
+    bgtask.add_task(
+        send_mail,
+        MessageSchema(
+            recipients=[email],
+            subject="Email geverifieerd, nu rijbewijs-verificatie",
+            body=f"<!DOCTYPE html><html><body><h1>Mooi, uw email is geverifieerd, nu alleen nog uw rijbewijs (dit gaat via stripe), <a href='{verificationsession.url}'>Klik hier om uw rijbewijs te gaan verifieren (u wordt doorgestuurd naar stripe)</a></h1></body></html>",
+            subtype=MessageType.html,
+        ),
+    )
+
     return HTMLResponse(f"""
     <!DOCTYPE html>
     <html>
     <body>
-    <h1> Geverifieerd! Je mag nu deze pagina sluiten </h1>
+    <h1> Geverifieerd! Je krijgt via de e-mail nog een link om uw rijbewijs te gaan verifieren. <a href='{verificationsession.url}'>Anders klik hier om uw rijbewijs te gaan doorsturen, dit gaat via stripe</a>. Na het verifieren krijg je nog een e-mail als antwoord op de rijbewijs-verificatie. </h1>
     </body>
     </html>
 

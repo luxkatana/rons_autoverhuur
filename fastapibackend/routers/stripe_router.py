@@ -12,7 +12,7 @@ from db import cars, authentication
 from bson import ObjectId
 
 from authentication import AuthUser, UserData
-from os import environ, path
+from os import environ
 from db import payments_status, usersdata
 
 from . import DatabaseCar
@@ -51,6 +51,11 @@ async def rent_car(
 ):
     if userdata.email_verified is False:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Email is not yet verified")
+
+    if userdata.stripe_verified is False:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Drivers license is not yet verified"
+        )
     if userdata.verified is False:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -195,7 +200,12 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
         """,
         subtype=MessageType.html,
     )
-    await send_mail(message, UserData.model_validate(userdata))
+    await send_mail(message)
+
+
+@StripeRouter.get("/identity-return")
+async def identity_return():
+    return "OK"
 
 
 @StripeRouter.get("/payment-success")

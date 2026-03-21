@@ -150,6 +150,7 @@ async def signup(
             "birthdate": datetime(1, 1, 1, tzinfo=timezone.utc),
             "verified": False,
             "email_verified": False,
+            "stripe_verified": False,
         }
     )
     verificationmail = MessageSchema(
