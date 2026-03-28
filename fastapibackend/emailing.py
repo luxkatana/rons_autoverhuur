@@ -20,9 +20,5 @@ fastmail = FastMail(
 )
 
 
-async def send_mail(messageschema: MessageSchema, usersdata: UserData = None):
-    if usersdata is not None and usersdata.email_verified is False:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, {"error": "Email is not yet verified"}
-        )
+async def send_mail(messageschema: MessageSchema, *args, **kwargs):
     await fastmail.send_message(messageschema)

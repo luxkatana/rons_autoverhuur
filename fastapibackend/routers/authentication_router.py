@@ -6,6 +6,7 @@ Authentication router
 """
 
 from datetime import datetime, timezone
+import stripe
 from fastapi_mail import MessageSchema, MessageType
 from fastapi import (
     APIRouter,
@@ -128,9 +129,7 @@ async def delete_test_account(
         422: {"description": "Validation error or e-mail exists"},
     },
 )
-async def signup(
-    signupform: SignupInputForm, background_tasks: BackgroundTasks
-) -> Response:  # e-mail is unique
+async def signup(signupform: SignupInputForm) -> Response:  # e-mail is unique
     existing_user = await db.authentication.find_one({"email": signupform.email})
     if existing_user is not None:
         raise HTTPException(
@@ -149,27 +148,37 @@ async def signup(
             "lastname": signupform.lastname,
             "birthdate": datetime(1, 1, 1, tzinfo=timezone.utc),
             "verified": False,
-            "email_verified": False,
             "stripe_verified": False,
         }
     )
+    verificationsession = await stripe.identity.VerificationSession.create_async(
+        type="document",
+        options={
+            "document": {
+                "require_matching_selfie": True,
+                # "allowed_types": ["driving_license", "id_card"],
+                "allowed_types": ["driving_license"],
+                "require_live_capture": True,
+            }
+        },
+        metadata={"user_id": str(newauthentication.inserted_id)},
+        return_url=environ["STRIPE_RETURN_URL"],
+    )
+
     verificationmail = MessageSchema(
         recipients=[signupform.email],
-        subject="Verifieer jouw e-mail",
+        subject="Verifieer uw rijbewijs",
         body=f"""
-        <!DOCTYPE html>
-        <html lang='nl'>
-
-
-        <body>
-        <h2>
-        Hallo, verifieer uw e-mail zodat we er zeker van kunnen zijn dat uw e-mail bestaat. <a href='{EMAIL_VERIFY_URL.format(str(newauthentication.inserted_id))}'>hier</a>
-        </h2>
-        </html>
+            <!DOCTYPE html><html><body><h1>Welkom, verifieer uw rijbewijs (dit gaat via stripe), <a href='{verificationsession.url}'>Klik hier om uw rijbewijs te gaan verifieren</a></h1></body></html>
         """,
         subtype=MessageType.html,
     )
-    background_tasks.add_task(send_mail, messageschema=verificationmail)
+    try:
+        await send_mail(verificationmail)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="e-mail is invalid"
+        )
     newtoken = await login(
         AuthenticationPayload(email=signupform.email, password=signupform.password)
     )

@@ -50,8 +50,6 @@ async def rent_car(
     userdata: Annotated[UserData, Depends(get_current_user_data)],
     payload: PaymentPayload,
 ):
-    if userdata.email_verified is False:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Email is not yet verified")
 
     if userdata.stripe_verified is False:
         raise HTTPException(
