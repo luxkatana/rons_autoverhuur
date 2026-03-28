@@ -29,18 +29,22 @@ async def webhook_endpoint(
 
     event_type = event["type"]
     print(event_type)
+    try:
+        verificationsession = await stripe.identity.VerificationSession.retrieve_async(
+            event["data"]["object"]["id"]
+        )
+        usr_id = verificationsession.metadata["user_id"]
+        authentication_data = await authentication.find_one({"_id": ObjectId(usr_id)})
+        email = authentication_data["email"]
+    except (
+        Exception
+    ):  # It's probably some other event, such as file stuffy or something? idk
+        ...
     if event_type in [
         "identity.verification_session.requires_input",
         "identity.verification_session.verified",
     ]:  # TODO: If, and only if this project will be used in production, then this code must be different. In testing mode, stripe does not verify the identity, so we just assuming it went through
-        session_id: str = event["data"]["object"]["id"]
-        verificationsession = await stripe.identity.VerificationSession.retrieve_async(
-            session_id
-        )
 
-        usr_id = verificationsession.metadata["user_id"]
-        authentication_data = await authentication.find_one({"_id": ObjectId(usr_id)})
-        email = authentication_data["email"]
         bg.add_task(
             send_mail,
             MessageSchema(
@@ -55,7 +59,28 @@ async def webhook_endpoint(
             {"_id": ObjectId(usr_id)}, {"$set": {"stripe_verified": True}}
         )
 
-    if event_type == "identity.verification_session.canceled":
-        print("User cancelled the identity request")
+    elif event_type == "identity.verification_session.canceled":
+        verificationsession = await stripe.identity.VerificationSession.create_async(
+            type="document",
+            options={
+                "document": {
+                    "require_matching_selfie": True,
+                    # "allowed_types": ["driving_license", "id_card"],
+                    "allowed_types": ["driving_license"],
+                    "require_live_capture": True,
+                }
+            },
+            metadata={"user_id": usr_id},
+            return_url=environ["STRIPE_RETURN_URL"],
+        )
+        bg.add_task(
+            send_mail,
+            MessageSchema(
+                recipients=[email],
+                subject="Rijebwijs geverifieerd, nu alleen nog leeftijd-verificatie",
+                body=f"<!DOCTYPE html><html><body><h1>Hallo, rijbewijs is niet geverifieerd, het schijnt zo te zijn dat je de verificatie-proces hebt geannuleerd <a href='{verificationsession.url}'>Klik hier om jezelf weer te verifieren.</a></h1></body></html>",
+                subtype=MessageType.html,
+            ),
+        )
 
     return {"status": "success"}

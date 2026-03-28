@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi.responses import HTMLResponse
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from emailing import send_mail
 from starlette.responses import JSONResponse
@@ -205,7 +206,9 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
 
 @StripeRouter.get("/identity-return")
 async def identity_return():
-    return "OK"
+    return HTMLResponse(
+        "<!DOCTYPE html><html><body><h1>Mooizo, je krijgt zo een e-mail binnen 1 minuut die je vertelt als je identiteit is gelegitimeerd of niet.</h1></body></html>"
+    )
 
 
 @StripeRouter.get("/payment-success")
