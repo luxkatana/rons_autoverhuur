@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi.responses import HTMLResponse
 from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
 from emailing import send_mail
 from starlette.responses import JSONResponse
@@ -12,7 +13,7 @@ from db import cars, authentication
 from bson import ObjectId
 
 from authentication import AuthUser, UserData
-from os import environ, path
+from os import environ
 from db import payments_status, usersdata
 
 from . import DatabaseCar
@@ -49,8 +50,11 @@ async def rent_car(
     userdata: Annotated[UserData, Depends(get_current_user_data)],
     payload: PaymentPayload,
 ):
-    if userdata.email_verified is False:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Email is not yet verified")
+
+    if userdata.stripe_verified is False:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Drivers license is not yet verified"
+        )
     if userdata.verified is False:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
@@ -195,7 +199,14 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
         """,
         subtype=MessageType.html,
     )
-    await send_mail(message, UserData.model_validate(userdata))
+    await send_mail(message)
+
+
+@StripeRouter.get("/identity-return")
+async def identity_return():
+    return HTMLResponse(
+        "<!DOCTYPE html><html><body><h1>Mooizo, je krijgt zo een e-mail binnen 1 minuut die je vertelt als je identiteit is gelegitimeerd of niet.</h1></body></html>"
+    )
 
 
 @StripeRouter.get("/payment-success")

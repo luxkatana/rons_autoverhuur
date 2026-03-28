@@ -1,25 +1,35 @@
 from concurrent.futures import ProcessPoolExecutor
 from typing import Annotated
+import stripe
 from bson import ObjectId
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
-    Response,
     WebSocket,
     WebSocketDisconnect,
     status,
 )
 from dateutil.relativedelta import relativedelta
 from fastapi.responses import HTMLResponse
-from authentication import AuthUser
+from fastapi_mail import MessageSchema, MessageType
+from authentication import AuthUser, UserData
 from .authentication_router import WS_get_current_user_data
-from db import usersdata
+from dotenv import load_dotenv
+from emailing import send_mail
+from db import usersdata, authentication
 import asyncio
 from datetime import datetime
 from fastmrz import FastMRZ
+from os import environ
+
+load_dotenv()
+stripe.api_key = environ["STRIPE_SECRET_KEY"]
+
 
 VerificationRouter = APIRouter()
+
 executor = ProcessPoolExecutor()
 
 
@@ -30,7 +40,7 @@ def verify_idcard(base64_img: str) -> dict[str, str]:
 
 
 async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
-    await websocket.send_text("Yo gimme that juicy base64 image")
+    await websocket.send_text("Base64 image of id-card back")
     received_base64 = await websocket.receive_text()
     loop = asyncio.get_running_loop()
     id_card_parsed_info = await loop.run_in_executor(
@@ -85,24 +95,6 @@ async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
         "age": years_diff,
         "mrz_id_card": id_card_parsed_info,
     }
-
-
-@VerificationRouter.get("/email-verify")
-async def email_verify(user_id: str):
-    try:
-        buser_id = ObjectId(user_id)
-    except TypeError:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST)
-    await usersdata.update_one({"_id": buser_id}, {"$set": {"email_verified": True}})
-    return HTMLResponse(f"""
-    <!DOCTYPE html>
-    <html>
-    <body>
-    <h1> Geverifieerd! Je mag nu deze pagina sluiten </h1>
-    </body>
-    </html>
-
-""")
 
 
 @VerificationRouter.websocket("/ws-verify", name="Verify legal documents")
