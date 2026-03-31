@@ -151,7 +151,7 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
 <body>
     <div class="container">
         <div class="header">
-            <img src="https://raw.githubusercontent.com/luxkatana/rons_autoverhuur/main/assets/rra.png" alt="Razende Ron's Autoverhuur"/>
+            <img src="https://raw.githubusercontent.com/luxkatana/rons_autoverhuur/main/assets/rra.png" alt="Razende Ron's Autoverhuur" width="100px" height="100px"/>
         </div>
 
         <div class="hero">
@@ -166,16 +166,8 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
             <h3>Reserveringsdetails:</h3>
             <table class="details-table">
                 <tr>
-                    <td class="label">Reserveringsnummer:</td>
-                    <td>#RR-123456</td>
-                </tr>
-                <tr>
                     <td class="label">Auto:</td>
                     <td>{product_name}</td>
-                </tr>
-                <tr>
-                    <td class="label">Ophaaldatum:</td>
-                    <td>[Datum] om [Tijd]</td>
                 </tr>
                 <tr>
                     <td class="label">Locatie:</td>

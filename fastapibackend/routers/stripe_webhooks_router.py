@@ -45,6 +45,7 @@ async def webhook_endpoint(
         "identity.verification_session.verified",
     ]:  # TODO: If, and only if this project will be used in production, then this code must be different. In testing mode, stripe does not verify the identity, so we just assuming it went through
 
+        print("Rijbewijs geverifieerd")
         bg.add_task(
             send_mail,
             MessageSchema(

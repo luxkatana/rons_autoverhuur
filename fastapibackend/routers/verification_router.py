@@ -4,17 +4,12 @@ import stripe
 from bson import ObjectId
 from fastapi import (
     APIRouter,
-    BackgroundTasks,
     Depends,
-    HTTPException,
     WebSocket,
     WebSocketDisconnect,
-    status,
 )
 from dateutil.relativedelta import relativedelta
-from fastapi.responses import HTMLResponse
-from fastapi_mail import MessageSchema, MessageType
-from authentication import AuthUser, UserData
+from authentication import AuthUser
 from .authentication_router import WS_get_current_user_data
 from dotenv import load_dotenv
 from emailing import send_mail
