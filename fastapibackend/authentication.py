@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel
 from typing import Annotated
-from fastapi import Depends
+from fastapi import Depends, HTTPException, status
 from db import authentication, usersdata
 import jwt
 import pwdlib
@@ -26,7 +26,12 @@ def decode_jwt(jwttoken: str) -> str:
     """
     Returns the ID of the user (the _id field in mongodb)
     """
-    return jwt.decode(jwttoken, SECRET_KEY, ALGORITHM)["id"]
+    try:
+        return jwt.decode(jwttoken, SECRET_KEY, ALGORITHM)["id"]
+    except jwt.exceptions.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="JWT token expired"
+        )
 
 
 class UserData(BaseModel):  # From the userdata collectin
