@@ -23,5 +23,5 @@ POST {{base}}/stripe/rent-car HTTP/1.1
 Authorization: Bearer {{access_token}}
 
 {
-  "car_id": "699c3e48c123958e7498dc55"
+  "car_id": "69ac85a8261cebf9420e65b5"
 }

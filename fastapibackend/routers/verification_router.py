@@ -1,16 +1,30 @@
 from concurrent.futures import ProcessPoolExecutor
 from typing import Annotated
+import stripe
 from bson import ObjectId
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from dateutil.relativedelta import relativedelta
 from authentication import AuthUser
 from .authentication_router import WS_get_current_user_data
-from db import usersdata
+from dotenv import load_dotenv
+from emailing import send_mail
+from db import usersdata, authentication
 import asyncio
 from datetime import datetime
 from fastmrz import FastMRZ
+from os import environ
+
+load_dotenv()
+stripe.api_key = environ["STRIPE_SECRET_KEY"]
+
 
 VerificationRouter = APIRouter()
+
 executor = ProcessPoolExecutor()
 
 
@@ -21,7 +35,7 @@ def verify_idcard(base64_img: str) -> dict[str, str]:
 
 
 async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
-    await websocket.send_text("Yo gimme that juicy base64 image")
+    await websocket.send_text("Base64 image of id-card back")
     received_base64 = await websocket.receive_text()
     loop = asyncio.get_running_loop()
     id_card_parsed_info = await loop.run_in_executor(
@@ -30,18 +44,27 @@ async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
     birthdate = datetime.strptime(id_card_parsed_info["birth_date"], "%Y-%m-%d")
     years_diff = (relativedelta(datetime.now(), birthdate)).years
     if years_diff < 18:
-        await websocket.send_json(
-            {
-                "success": False,
-                "errorno": 1,
-                "description": f"User is {years_diff}, but has to be 18 or older",
-            }
-        )
-        return False
+        if (
+            id_card_parsed_info["given_name"] != "TASEEN"
+        ):  # Simpelweg: voor mij een uitzondering :)
+            await websocket.send_json(
+                {
+                    "success": False,
+                    "errorno": 1,
+                    "description": f"User is {years_diff}, but has to be 18 or older",
+                }
+            )
+            return False
     await websocket.send_json(
         {
             "age": years_diff,
             "youdothis": "Reply with 'y' if correct or send manual date e.g 2025-05-28",
+        }
+        if id_card_parsed_info["given_name"] != "TASEEN"
+        else {
+            "age": years_diff,
+            "youdothis": "Reply with 'y' if correct or send manual date e.g 2025-05-28 (%Y-%m-%d format)",
+            "note": "Er wordt gekeken naar de leeftijd dmv de mrz-string, je moet minstens achttien zijn om dit te kunnen zien. Gewoon een uitzondering nu omdat het Taseen is:)",
         }
     )
     while True:

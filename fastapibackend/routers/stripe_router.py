@@ -1,17 +1,20 @@
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
+from fastapi.responses import HTMLResponse
+from fastapi_mail import ConnectionConfig, FastMail, MessageSchema, MessageType
+from emailing import send_mail
 from starlette.responses import JSONResponse
 
-from routers.authentication_router import get_current_user_auth
+from routers.authentication_router import get_current_user_auth, get_current_user_data
 from pydantic import BaseModel
-from db import cars
+from db import cars, authentication
 from bson import ObjectId
 
-from authentication import AuthUser
+from authentication import AuthUser, UserData
 from os import environ
-from db import payments_status
+from db import payments_status, usersdata
 
 from . import DatabaseCar
 import stripe
@@ -44,8 +47,20 @@ class PaymentPayload(BaseModel):
 @StripeRouter.post("/rent-car")
 async def rent_car(
     authuser: Annotated[AuthUser, Depends(get_current_user_auth)],
+    userdata: Annotated[UserData, Depends(get_current_user_data)],
     payload: PaymentPayload,
 ):
+
+    if userdata.stripe_verified is False:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN, "Drivers license is not yet verified"
+        )
+    if userdata.verified is False:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Not yet verified, verify by opening a websocket connection at /ws-verify and sending then first the access token, and afterwards intercepting the message that the peer has sent",
+        )
+
     try:
         result = await cars.find_one({"_id": ObjectId(payload.car_id)})
     except:
@@ -58,6 +73,8 @@ async def rent_car(
             "Invalid car given or car is from VOS autoverhuur (Can't rent cars from VOS autoverhuur )",
         )
     car = DatabaseCar.model_validate(result)
+    if car.available is False:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Car is not available anymore")
     price = car.price
     price_in_cents: int = int(str(price).replace(".", ""))  # In cents actually
     product_name = f"De {car.brand} {car.model} {car.class_} {car.type}"
@@ -100,8 +117,97 @@ async def rent_car(
     return {"payment_url": session.url}
 
 
+async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
+
+    userdata = await usersdata.find_one({"_id": userauth["_id"]})
+    product_name = f"{car.brand} {car.model} {car.class_} {car.type}"
+    message = MessageSchema(
+        subject=f"De betaling van de {product_name} is gelukt!",
+        recipients=[
+            userauth["email"]
+        ],  # Gewoon gepakt bij chatGPT deze body, ik heb geen zin om een eigen html pagina te gaan schrijven
+        body=f"""
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bevestiging Razende Ron's Autoverhuur</title>
+    <style>
+        body {{ margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #1a3c3c; color: #ffffff; }}
+        .container {{ width: 100%; max-width: 600px; margin: 0 auto; background-color: #ffffff; color: #333333; }}
+        .header {{ background-color: #1a3c3c; padding: 40px; text-align: center; }}
+        .header img {{ max-width: 250px; height: auto; }}
+        .hero {{ background-color: #ff9900; color: #ffffff; padding: 20px; text-align: center; }}
+        .content {{ padding: 30px; line-height: 1.6; }}
+        .details-table {{ width: 100%; border-collapse: collapse; margin-top: 20px; }}
+        .details-table td {{ padding: 10px; border-bottom: 1px solid #eeeeee; }}
+        .details-table td.label {{ font-weight: bold; color: #1a3c3c; }}
+        .button-wrapper {{ text-align: center; padding: 30px; }}
+        .button {{ background-color: #ff9900; color: white; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold; }}
+        .footer {{ background-color: #f4f4f4; color: #777777; padding: 20px; text-align: center; font-size: 12px; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://raw.githubusercontent.com/luxkatana/rons_autoverhuur/main/assets/rra.png" alt="Razende Ron's Autoverhuur" width="100px" height="100px"/>
+        </div>
+
+        <div class="hero">
+            <h1>Bedankt voor je boeking!</h1>
+            <p>Je staat op het punt om plankgas te gaan.</p>
+        </div>
+
+        <div class="content">
+            <p>Beste <strong>{userdata['firstname']}</strong>,</p>
+            <p>Geweldig nieuws! Je betaling is succesvol ontvangen en je reservering bij <strong>Razende Ron's Autoverhuur</strong> is definitief bevestigd. Je gereserveerde <strong>{product_name}</strong> staat voor je klaar op de afgesproken datum.</p>
+            
+            <h3>Reserveringsdetails:</h3>
+            <table class="details-table">
+                <tr>
+                    <td class="label">Auto:</td>
+                    <td>{product_name}</td>
+                </tr>
+                <tr>
+                    <td class="label">Locatie:</td>
+                    <td>Razende Rons Autoverhuur Vestiging Emmen, postcode 7825 </td>
+                </tr>
+            </table>
+
+            <p>Heb je nog vragen? Stuur je vraag door naar de email <strong>R.matena@hondsrugcollege.nl</strong>
+            <p>Met racy groet,<br>Team Razende Ron</p>
+        </div>
+
+        <div class="footer">
+            <p>&copy; 2026 Razende Ron's Autoverhuur | Razende Rons Autoverhuur Vestiging, Emmen</p>
+            <p>Je ontvangt deze mail omdat je een reservering hebt geplaatst.</p>
+        </div>
+    </div>
+</body>
+</html>
+
+
+        """,
+        subtype=MessageType.html,
+    )
+    await send_mail(message)
+    return HTMLResponse(
+        "<!DOCTYPE html><html><body><h1>Betaling gelukt, we hebben zojuist een e-mail verstuurd ter bevestiging.</h1></body></html>"
+    )
+
+
+@StripeRouter.get("/identity-return")
+async def identity_return():
+    return HTMLResponse(
+        "<!DOCTYPE html><html><body><h1>Mooizo, je krijgt zo een e-mail binnen 1 minuut die je vertelt als je identiteit is gelegitimeerd of niet.</h1></body></html>"
+    )
+
+
 @StripeRouter.get("/payment-success")
-async def stripe_success(session_id: str) -> Response:
+async def stripe_success(
+    session_id: str, background_tasks: BackgroundTasks
+) -> Response:
     payment_status_document = await payments_status.find_one(
         {"_id": ObjectId(session_id)}
     )
@@ -112,6 +218,16 @@ async def stripe_success(session_id: str) -> Response:
     )
     await payments_status.update_one(
         {"_id": payment_status_document["_id"]}, {"$set": {"status": "completed"}}
+    )
+    userauth: dict = await authentication.find_one(
+        {"_id": payment_status_document["user_id"]}
+    )
+    background_tasks.add_task(
+        send_email_success,
+        userauth,
+        DatabaseCar.model_validate(
+            await cars.find_one({"_id": payment_status_document["car_id"]})
+        ),
     )
     return Response(status_code=status.HTTP_200_OK)
 

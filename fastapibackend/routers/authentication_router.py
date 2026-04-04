@@ -6,9 +6,11 @@ Authentication router
 """
 
 from datetime import datetime, timezone
+import stripe
+from fastapi_mail import MessageSchema, MessageType
 from fastapi import (
     APIRouter,
-    Form,
+    BackgroundTasks,
     WebSocket,
     WebSocketException,
     status,
@@ -20,17 +22,25 @@ from starlette import status as WebsocketStatusCodes
 from bson import ObjectId
 from fastapi.security import OAuth2PasswordBearer
 from typing import Annotated
+from os import environ
+from dotenv import load_dotenv
 
 from pydantic import BaseModel, EmailStr, Field
-import starlette
+from emailing import send_mail
 import authentication, db
+
+load_dotenv()
+EMAIL_VERIFY_URL: str = f"{environ['EMAIL_VERIFY_URL']}?user_id={{}}"
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="authenticate")
 
 
 async def WS_get_current_user_data(websocket: WebSocket) -> authentication.UserData:
     await websocket.accept()
-    token: str = await websocket.receive_text()
+    token: str = websocket.headers.get("JWT", None)
+    if token is None:
+        raise WebSocketException(status.WS_1001_GOING_AWAY, "Missing JWT header")
+    # token: str = await websocket.receive_text()
 
     try:
         user_id = authentication.decode_jwt(token)
@@ -54,7 +64,11 @@ async def get_current_user_auth(
 ) -> authentication.AuthUser:
     user_id = authentication.decode_jwt(token)
     authuser = await db.authentication.find_one({"_id": ObjectId(user_id)})
-    return authentication.AuthUser.from_database(authuser)
+    try:
+        x = authentication.AuthUser.from_database(authuser)
+        return x
+    except:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "JWT is invalid")
 
 
 async def get_current_user_data(
@@ -141,8 +155,37 @@ async def signup(signupform: SignupInputForm) -> Response:  # e-mail is unique
             "lastname": signupform.lastname,
             "birthdate": datetime(1, 1, 1, tzinfo=timezone.utc),
             "verified": False,
+            "stripe_verified": False,
         }
     )
+    verificationsession = await stripe.identity.VerificationSession.create_async(
+        type="document",
+        options={
+            "document": {
+                "require_matching_selfie": True,
+                # "allowed_types": ["driving_license", "id_card"],
+                "allowed_types": ["driving_license"],
+                "require_live_capture": True,
+            }
+        },
+        metadata={"user_id": str(newauthentication.inserted_id)},
+        return_url=environ["STRIPE_RETURN_URL"],
+    )
+
+    verificationmail = MessageSchema(
+        recipients=[signupform.email],
+        subject="Verifieer uw rijbewijs",
+        body=f"""
+            <!DOCTYPE html><html><body><h1>Welkom, verifieer uw rijbewijs (dit gaat via stripe), <a href='{verificationsession.url}'>Klik hier om uw rijbewijs te gaan verifieren</a></h1></body></html>
+        """,
+        subtype=MessageType.html,
+    )
+    try:
+        await send_mail(verificationmail)
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="e-mail is invalid"
+        )
     newtoken = await login(
         AuthenticationPayload(email=signupform.email, password=signupform.password)
     )
