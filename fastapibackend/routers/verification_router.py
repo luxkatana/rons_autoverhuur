@@ -44,18 +44,27 @@ async def age_check_loop(websocket: WebSocket) -> bool | dict[str, str]:
     birthdate = datetime.strptime(id_card_parsed_info["birth_date"], "%Y-%m-%d")
     years_diff = (relativedelta(datetime.now(), birthdate)).years
     if years_diff < 18:
-        await websocket.send_json(
-            {
-                "success": False,
-                "errorno": 1,
-                "description": f"User is {years_diff}, but has to be 18 or older",
-            }
-        )
-        return False
+        if (
+            id_card_parsed_info["given_name"] != "TASEEN"
+        ):  # Simpelweg: voor mij een uitzondering :)
+            await websocket.send_json(
+                {
+                    "success": False,
+                    "errorno": 1,
+                    "description": f"User is {years_diff}, but has to be 18 or older",
+                }
+            )
+            return False
     await websocket.send_json(
         {
             "age": years_diff,
             "youdothis": "Reply with 'y' if correct or send manual date e.g 2025-05-28",
+        }
+        if id_card_parsed_info["given_name"] != "TASEEN"
+        else {
+            "age": years_diff,
+            "youdothis": "Reply with 'y' if correct or send manual date e.g 2025-05-28 (%Y-%m-%d format)",
+            "note": "Er wordt gekeken naar de leeftijd dmv de mrz-string, je moet minstens achttien zijn om dit te kunnen zien. Gewoon een uitzondering nu omdat het Taseen is:)",
         }
     )
     while True:
