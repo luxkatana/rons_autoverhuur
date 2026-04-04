@@ -192,6 +192,9 @@ async def send_email_success(userauth: dict[str, str], car: DatabaseCar):
         subtype=MessageType.html,
     )
     await send_mail(message)
+    return HTMLResponse(
+        "<!DOCTYPE html><html><body><h1>Betaling gelukt, we hebben zojuist een e-mail verstuurd ter bevestiging.</h1></body></html>"
+    )
 
 
 @StripeRouter.get("/identity-return")
