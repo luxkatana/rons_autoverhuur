@@ -37,7 +37,10 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="authenticate")
 
 async def WS_get_current_user_data(websocket: WebSocket) -> authentication.UserData:
     await websocket.accept()
-    token: str = await websocket.receive_text()
+    token: str = websocket.headers.get("JWT", None)
+    if token is None:
+        raise WebSocketException(status.WS_1001_GOING_AWAY, "Missing JWT header")
+    # token: str = await websocket.receive_text()
 
     try:
         user_id = authentication.decode_jwt(token)
@@ -61,7 +64,11 @@ async def get_current_user_auth(
 ) -> authentication.AuthUser:
     user_id = authentication.decode_jwt(token)
     authuser = await db.authentication.find_one({"_id": ObjectId(user_id)})
-    return authentication.AuthUser.from_database(authuser)
+    try:
+        x = authentication.AuthUser.from_database(authuser)
+        return x
+    except:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "JWT is invalid")
 
 
 async def get_current_user_data(
