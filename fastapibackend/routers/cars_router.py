@@ -25,10 +25,6 @@ class VosCarDatabase(pydantic.BaseModel):
     winter_tires: bool
 
 
-#    available: bool
-# TODO: Implement available flag
-
-
 class DatabaseCar(pydantic.BaseModel):
     id: ObjectIdField = pydantic.Field(alias="_id")
     age: int
@@ -113,8 +109,6 @@ class VosCar:
     towbar: bool
     type: str
     winter_tires: bool
-    # available: bool
-    # TODO: Available flag implement
 
 
 @strawberry.experimental.pydantic.type(model=DatabaseCar)

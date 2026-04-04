@@ -9,7 +9,10 @@ from routers import (
     get_current_user_auth,
     get_current_user_data,
 )
+import warnings
 import authentication
+
+warnings.warn("NIET VERGETEN OM STRIPE WEBHOOK TE GAAN LATEN DRAAIEN!!11!!")
 
 api = FastAPI(docs_url="/")
 api.include_router(AuthenticationRouter, prefix="/auth")
